@@ -1,9 +1,12 @@
 import numpy as np
 import pygame
 import sys
+import math
 
 BLUE = (0,0,205)
 GRAY = (5,5,5)
+RED = (238,44,44)
+YELLOW = (255,193,37)
 
 ROW_TOTAL = 6 #total number of rows
 COL_TOTAL = 7 #total number of columns
@@ -63,6 +66,15 @@ def draw_board(layout):
 			#defined GRAY in line6
 			#While using pygame you must use integers when determinig position/radius
 			pygame.draw.circle(screen, GRAY, (int(c*SQUARESIZE+SQUARESIZE/2), int(r*SQUARESIZE+SQUARESIZE+SQUARESIZE/2)), RAD)
+	
+	for c in range(COL_TOTAL):
+		for r in range(ROW_TOTAL):
+			if layout[r][c] == 1:
+				pygame.draw.circle(screen, RED, (int(c*SQUARESIZE+SQUARESIZE/2), h-int(r*SQUARESIZE+SQUARESIZE/2)), RAD)
+			elif layout[r][c] == 2:
+				pygame.draw.circle(screen, YELLOW, (int(c*SQUARESIZE+SQUARESIZE/2), h-int(r*SQUARESIZE+SQUARESIZE/2)), RAD)
+	pygame.display.update() #ensure pygame updates the display so we changes
+
 layout = create_board()
 print_board(layout)
 game_over = False #determining when the game will be over
@@ -81,44 +93,63 @@ screen = pygame.display.set_mode(s)
 draw_board(layout)
 pygame.display.update() #ensure pygame updates the display so we changes
 
-while not game_over:
+myfont = pygame.font.SysFont("arial.ttf",40)
 
+while not game_over:
 	#This will exit out of the game once you click the [X], this function performs a system exit
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT:
 			sys.exit()
 
+		if event.type == pygame.MOUSEMOTION:
+			pygame.draw.rect(screen,GRAY, (0,0, w, SQUARESIZE))
+			posx = event.pos[0]
+			if turn == 0:
+				pygame.draw.circle(screen,RED,(posx, int(SQUARESIZE/2)), RAD)
+			else:
+				pygame.draw.circle(screen,YELLOW,(posx, int(SQUARESIZE/2)), RAD)
+			pygame.display.update()
+
 		if event.type == pygame.MOUSEBUTTONDOWN:
-			continue
+			pygame.draw.rect(screen,GRAY, (0,0, w, SQUARESIZE))
+			#print(event.pos) #this function will show where our mouse is clicking
 
 
 			# #P1 input
 
-			# if turn == 0:
-			# 	column = int(input("P1, please choose where you want to put your piece (0-6):"))
+			if turn == 0:
+				posx = event.pos[0]
+				column = int(math.floor(posx/SQUARESIZE))
 
-			# 	if is_valid(layout, column):
-			# 		row = open_row(layout, column)
-			# 		drop_piece(layout, row, column, 1)
+				if is_valid(layout, column):
+					row = open_row(layout, column)
+					drop_piece(layout, row, column, 1)
 
-			# 		if is_winner(layout, 1):
-			# 			print("Congratulations P1! You have won.")
-			# 			game_over = True
+					if is_winner(layout, 1):
+						label = myfont.render("Congratulations! P1 has won.",1, RED)
+						screen.blit(label,(40,10))
+						game_over = True
 
 
 			# #P2 input
-			# else:
-			# 	column = int(input("P2, please choose where you want to put your piece (0-6):"))
+			else:
+				posx = event.pos[0]
+				column = int(math.floor(posx/SQUARESIZE))
 
-			# 	if is_valid(layout, column):
-			# 		row = open_row(layout, column)
-			# 		drop_piece(layout, row, column, 2)
+				if is_valid(layout, column):
+					row = open_row(layout, column)
+					drop_piece(layout, row, column, 2)
 
-			# 		if is_winner(layout, 2):
-			# 			print("Congratulations P2! You have won.")
-			# 			game_over = True
+					if is_winner(layout, 2):
+						label = myfont.render("Congratulations! P2 has won.",2, YELLOW)
+						screen.blit(label,(40,10))
+						game_over = True
 
-			# print_board(layout)
+			print_board(layout)
+			draw_board(layout)
 
-			# turn += 1
-			# turn = turn % 2 #dividing by two to ensure the turns are alternating 
+			turn += 1
+			turn = turn % 2 #dividing by two to ensure the turns are alternating 
+
+			if game_over:
+				pygame.time.wait(4000)
