@@ -64,37 +64,114 @@ def is_winner(layout, piece): #determines wether a player has won
 				if layout[r][c] == piece and layout[r-1][c+1] == piece and layout[r-2][c+2] == piece and layout[r-3][c+3] == piece:
 					return True
 
-def evaluate_window(window, piece):
+def window_eval(window, piece): #makes it so we dont have to copy and paste 4 lines of code in each pos_score
 	score = 0
 	opp_piece = P_PIECE
 	if piece == P_PIECE:
 		opp_piece = A_PIECE
-	if window.count(piece) == 4:
+
+	if window.count(piece) == 4: #this sets a score to each move, to acquire a 1,2,3,4 in a row
 		score += 100
 	elif window.count(piece) == 3 and window.count(EMPTY) == 1:
-		score += 5
+		score += 10
 	elif window.count(piece) == 2 and window.count(EMPTY) == 2:
-		score += 2
-	if window.count(opp_piece) == 3 and window.count(EMPTY) == 1:
-		score -= 4
+		score += 5
+
+	if window.count(opp_piece) == 3 and window.count(EMPTY) == 1: #this states; if opponent gets 3 in a row, AI losses 8 points
+		score -= -8
+
 	return score
 
-def pos_score(layout, piece):
+def pos_score(layout, piece): # this function will count how many piece you have together, which will ensure you/AI wins
 	score = 0
 
-	#Horizontal
-	for r in range(ROW_TOTAL):
-		row_array = [int(i) for i in list(layout[r,:])]
-		for c in range(COL_TOTAL - 3):
-			window = row_array[c:c+W_LENGTH]
-			if window.count(piece) == 4:
-				score += 100
-			elif window.count(piece) == 3 and window.count(EMPTY) == 1:
-				score += 10
+#make preferences for centering AI piece since it increases chances of winning
+	center_array = [int(i) for i in list(layout[:, COL_TOTAL//2])] #floor divison by 2 will get you the center column
+	center_count = center_array.count(piece)
+	score += center_count * 6
 
+	#Horizontal
+	for r in range(ROW_TOTAL): #for each row this will happen:
+		row_array = [int(i) for i in list(layout[r,:])] #added int i to make sure were not contradicting with a float
+		for c in range(COL_TOTAL - 3): #this will look at all the window sizes of 4
+			window = row_array[c:c+W_LENGTH]
+			score += window_eval(window,piece)
+
+	#Vertical 
+	for c in range(COL_TOTAL):
+		col_array = [int(i) for i in list(layout[:,c])]
+		for r in range(ROW_TOTAL-3):
+			window = col_array[r:r+W_LENGTH]
+			score += window_eval(window,piece)
+
+	#Diagnol(+)
+	for r in range(ROW_TOTAL-3):#-3 because we have to cut off each row going up
+		for c in range(COL_TOTAL-3): #this is going to the right each time so we have to cut off 3 here too
+			window = [layout[r+i][c+i] for i in range(W_LENGTH)]
+			score += window_eval(window,piece)
+
+	#Diagnol(-)
+	for r in range(ROW_TOTAL-3):
+		for c in range(COL_TOTAL-3):
+			window = [layout[r+3-i][c+1] for i in range(W_LENGTH)] #have to add 3 because you have to go up first to get a diagnol(-) connect 4
+			#row decreases but column increases when diagnol(-)
+			score += window_eval(window,piece)
 	return score
 
-def check_valid(layout):
+def is_terminal_node(layout): #initializing a terminal node so its defined as either no valid moves, Player winning or AI winning 
+	return is_winner(layout, P_PIECE) or is_winner(layout, A_PIECE)or len(check_valid(layout)) == 0 #player wins, AI wins, no valid moves, respectively
+
+def minimax(layout,depth,alpha, beta, maximizingPlayer): #using pseudocode from wikipedia of minimax, and initializing alpha beta pruning using wiki as well
+	#minimax algorithm basically looks into the future to determine the best possible "branch" to go into for the best score/result
+	#maximizingPlayer will be true for the AI since the algo should favour the AI and false for the Player
+	#mutually recursive since min calls max, and max calls min
+	valid_locations = check_valid(layout)
+	terminal_node = is_terminal_node(layout)
+	if depth == 0 or terminal_node:
+		if terminal_node:
+			if is_winner(layout, A_PIECE): #if AI is about to win then it should be favoured with +10000 points
+				return (None, 10000)
+			elif is_winner(layout, P_PIECE):
+				return (None, -10000) #if Player is about to win then it should be favoured with -10000 points
+			else: #no valid moves left
+				return (None, 0)
+		else: #When depth is 0
+			return (None,pos_score(layout, A_PIECE)) #this will find the heuristic value of board
+
+	if maximizingPlayer:
+		value = -math.inf #+/- inf is determined by pseudocode in the wiki
+		col = random.choice(valid_locations) #initializing the choice to random 
+		for column in valid_locations: #checks each column for valid locations
+			row = open_row(layout,column)#checks each row for valid locations
+			copy_board = layout.copy() #need to make a copy or it will use the same memory as the original board
+			drop_piece(copy_board, row, column, A_PIECE) #drops piece in the "best" position
+			new_score = minimax(copy_board, depth-1, alpha, beta, False)[1] #this 
+			if new_score > value: #this calculates wether the current move will result in the best possible score
+				value = new_score
+				col = column
+			alpha = max(alpha, value) #alpha beta pruning makes the algorithm alot faster since it will prune unneccessary branches 
+			if alpha >= beta:
+				break
+		return col, value
+	
+	else: #Minimizing Player
+		value = math.inf
+		col = random.choice(valid_locations)
+		for column in valid_locations:
+			row = open_row(layout,column)
+			copy_board = layout.copy()
+			drop_piece(copy_board,row,column,P_PIECE)
+			new_score = minimax(copy_board, depth-1, alpha, beta, True) [1]#the false and true statements allows us to switch between each minimax algorithm
+			if new_score < value: #this calculates wether the players could make a move which would result in a lower score for the AI
+				value = new_score
+				col = column
+			beta = min(beta,value)
+			if alpha >= beta:
+				break
+		return col, value
+
+
+def check_valid(layout): #this function will show the AI if the column chosen is a valid location
 	valid_locations = []
 	for column in range(COL_TOTAL):
 		if is_valid(layout,column):
@@ -102,15 +179,15 @@ def check_valid(layout):
 	return valid_locations
 
 def best_move(layout, piece):
-	valid_location = check_valid(layout)
-	best_score = 0
-	best_column = random.choice(valid_location)
+	valid_location = check_valid(layout) #this checks if chosen location is valid
+	best_score = -2000 #to make sure the code doesnt crash if the AI total score goes below 0
+	best_column = random.choice(valid_location) 
 	for column in valid_location:
-		row = open_row(layout, column)
-		temp_board = layout.copy()
+		row = open_row(layout, column) #this will evaluate each movie using the function
+		temp_board = layout.copy() #have to make a copy since this will duplicate and moify the original board if we dont copy
 		drop_piece(temp_board,row,column,piece)
-		score = pos_score(temp_board,piece)
-		if score > best_score:
+		score = pos_score(temp_board,piece) 
+		if score > best_score: #this says that if the score is greater than 0, then it will change the positions
 			best_score = score
 			best_column = column
 	return best_column
@@ -155,7 +232,7 @@ pygame.display.update() #ensure pygame updates the display so we changes
 
 myfont = pygame.font.SysFont("arial.ttf",40)
 
-turn = random.randint(PLAYER, AI)
+turn = random.randint(PLAYER, AI) #this makes who goes first random 
 
 while not game_over:
 
@@ -170,6 +247,7 @@ while not game_over:
 			if turn == PLAYER:
 				pygame.draw.circle(screen,RED,(posx, int(SQUARESIZE/2)), RAD)
 			pygame.display.update()
+			#took out yellow tile so the tile doesnt show up when its the AI's turn
 
 		if event.type == pygame.MOUSEBUTTONDOWN:
 			pygame.draw.rect(screen,GRAY, (0,0, w, SQUARESIZE))
@@ -194,17 +272,16 @@ while not game_over:
 					turn += 1
 					turn = turn % 2	
 
-					print_board(layout)
+					print_board(layout) #updates board so the delay we set works 
 					draw_board(layout)
 
 
 	#P2 input
 	if turn == AI and not game_over:
-		#column = random.randint(0, COL_TOTAL-1)
-		column = best_move(layout, A_PIECE)
 
+		column, minimax_score = minimax(layout,6,-math.inf, math.inf, True) #this implements the minimax algorithm before outputting the AI move
+		#greater depth will increase the time it takes for the AI to make a move, however using alpha beta pruning we can reduce this time significantly
 		if is_valid(layout, column):
-			pygame.time.wait(500)
 			row = open_row(layout, column)
 			drop_piece(layout, row, column, A_PIECE)
 
@@ -220,4 +297,4 @@ while not game_over:
 			turn = turn % 2	
 
 	if game_over:
-		pygame.time.wait(2000)
+		pygame.time.wait(2500)
